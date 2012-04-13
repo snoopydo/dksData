@@ -1,4 +1,5 @@
-﻿using dksData2;
+﻿using dksData;
+using dksData2;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System;
 using System.Data;
@@ -72,7 +73,7 @@ namespace TestProject1
 
         #endregion
 
-       
+
         #region "Query<ValueTypes>"
         [TestMethod()]
         public void Query_Ints()
@@ -129,7 +130,7 @@ namespace TestProject1
                             from (
 	                            select 15 as c union all select 2 union all select 3 union all select 4 as c union all select 5 union all select 6 union all select 7 as c union all select 8 union all select 9 union all select 99
                             ) data
-                            where c > @0 and c < @min and 'aa'=@other and @i=5", 5, new { min = 20, other = "aa" }, new System.Data.SqlClient.SqlParameter("i", 5));
+                            where c > @0 and c < @min and 'aa'=@other and @i=5", 5, new { other = "aa", min = 20 }, new System.Data.SqlClient.SqlParameter("i", 5));
 
             results.IsSequenceEqualTo(new[] { 15, 6, 7, 8, 9 });
         }
@@ -150,7 +151,7 @@ namespace TestProject1
         }
         #endregion
 
-    
+
         #region "ExecuteNonQuery"
         [TestMethod()]
         public void ExecuteNonQuery()

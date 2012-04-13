@@ -109,40 +109,9 @@ namespace dksData2
         }
         public static IEnumerable<T> Query<T>(this IDbConnection db, CommandType commandType, string sql, params object[] parameters)
         {
-            var new_parameters = new List<object>();
-            sql = ParseParameters(sql, parameters, new_parameters);
-
-            using (var cmd = db.CreateCommand())
+            using(var cmd = dksData.Database.CreateCommand(db,sql,parameters))
             {
-                cmd.CommandText = sql;
                 cmd.CommandType = commandType;
-
-                if (new_parameters.Count > 0)
-                {
-                    int i = 0;
-                    foreach (var param in new_parameters)
-                    {
-                        IDbDataParameter p;
-                        p = param as IDbDataParameter;
-                        if (p == null)
-                        {
-                            p = cmd.CreateParameter();
-
-                            p.ParameterName = i.ToString();
-                            p.Value = param;
-
-                            i++;
-                        }
-
-                        // make strings a consistent size, helps with query plan caching.
-                        if (param.GetType() == typeof(string) && p.Size < 4000)
-                        {
-                            p.Size = 4000;
-                        }
-
-                        cmd.Parameters.Add(p);
-                    }
-                }
 
                 using (var reader = cmd.ExecuteReader())
                 {
@@ -260,30 +229,7 @@ namespace dksData2
 
 
 
-        #region "ExecuteScalar<T>(...)"
-        public static T ExecuteScalar<T>(this IDbConnection db, string sql)
-        {
-            Type type = typeof(T);
-
-            if (type.IsValueType || type == typeof(string))
-            {
-                T result;
-
-                using (var cmd = db.CreateCommand())
-                {
-                    cmd.CommandText = sql;
-
-                    result = (T)cmd.ExecuteScalar();
-
-                    cmd.Dispose();
-                }
-
-                return result;
-            }
-            else
-                throw new InvalidOperationException("Can't use ExecuteScalar to create complex types.");
-        }
-        #endregion
+   
 
         #region "ExecuteNonQuery(...)"
         public static int ExecuteNonQuery(this IDbConnection db, string sql)
