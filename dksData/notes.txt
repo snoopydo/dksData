@@ -1,0 +1,31 @@
+﻿
+
+var orders = db.Query<order>(new Type[] {typeof(customer), typeof(billingaddress), typeof(deliveryaddress), typeof(product)}, mapping.callback, sql, args)
+
+
+
+for each row from reader
+
+    for each t in Type[]
+        find reader overlay point
+        obj of type t
+        generate il to map t from row
+    next
+
+    push Types onto stack
+    result  = mapping.callback
+    if result != null
+        yield return result
+    else
+        flush = true
+next
+
+if flush==true
+    yield return mapping.callback(null,...)
+
+
+
+
+
+
+
