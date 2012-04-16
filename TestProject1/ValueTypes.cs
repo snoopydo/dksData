@@ -1,5 +1,4 @@
 ﻿using dksData;
-using dksData2;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System;
 using System.Data;
@@ -113,7 +112,7 @@ namespace TestProject1
         [TestMethod]
         public void Query_Ints_WithObjectParameter()
         {
-            var results = db.Query<int>(CommandType.Text, @"select *
+            var results = db.Query<int>(@"select *
                             from (
 	                            select 15 as c union all select 2 union all select 3 union all select 4 as c union all select 5 union all select 6 union all select 7 as c union all select 8 union all select 9 union all select 99
                             ) data
@@ -126,7 +125,7 @@ namespace TestProject1
         [TestMethod]
         public void Query_Ints_WithObjectParameterAndSQLParameter()
         {
-            var results = db.Query<int>(CommandType.Text, @"select *
+            var results = db.Query<int>(@"select *
                             from (
 	                            select 15 as c union all select 2 union all select 3 union all select 4 as c union all select 5 union all select 6 union all select 7 as c union all select 8 union all select 9 union all select 99
                             ) data
@@ -156,7 +155,13 @@ namespace TestProject1
         [TestMethod()]
         public void ExecuteNonQuery()
         {
+            // how to handle this? 
+            // query parser sees @t and expects to see a parameter name t passed in....
             Assert.AreEqual<int>(2, db.ExecuteNonQuery("declare @t table(i1 int, i2 int); insert into @t(i1,i2) select 1, 2 union all select 3,4"));
+
+            //this works but will it continue too?
+            //Assert.AreEqual<int>(2, db.ExecuteNonQuery("declare @@t table(i1 int, i2 int); insert into @@t(i1,i2) select 1, 2 union all select 3,4"));
+
         }
         #endregion
     }

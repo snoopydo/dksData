@@ -1,4 +1,4 @@
-﻿using dksData2;
+﻿using dksData;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System;
 using System.Data;
@@ -89,7 +89,7 @@ namespace TestProject1
         public void TestDog()
         {
             var guid = Guid.NewGuid();
-            var dog = db.Query<Dog>("select '' as Extra, 1 as Age, 0.1 as Name1 , Id = @id", new { Id = guid });
+            var dog = db.Query<Dog>("select '' as Extra, 1 as Age, 0.1 as Name1 , Id = @id", new { Id = guid }).ToList();
 
             dog.Count()
                .IsEqualTo(1);
@@ -114,8 +114,11 @@ namespace TestProject1
         [TestMethod()]
         public void TestCat()
         {
+            Cat c = new Cat();
+            c.Age = 1;
+
             var guid = Guid.NewGuid();
-            var cat = db.Query<Cat>("select '' as Extra, 1 as Age, 0.1 as Name1 , Id = @id", new { Id = guid });
+            var cat = db.Query<Cat>("select '' as Extra, 1 as Age, 0.1 as Name1 , Id = @id", new { Id = guid }).ToList();
 
             cat.Count()
                .IsEqualTo(1);
