@@ -72,7 +72,7 @@ namespace TestProject1
 
         #endregion
 
-       
+
 
         // test hydrating POCOs
         public class Dog
@@ -114,9 +114,6 @@ namespace TestProject1
         [TestMethod()]
         public void TestCat()
         {
-            Cat c = new Cat();
-            c.Age = 1;
-
             var guid = Guid.NewGuid();
             var cat = db.Query<Cat>("select '' as Extra, 1 as Age, 0.1 as Name1 , Id = @id", new { Id = guid }).ToList();
 

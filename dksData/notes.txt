@@ -29,3 +29,23 @@ if flush==true
 
 
 
+class invoice
+    date, orderno, ref, value, etc
+    Address as class
+        Street as string
+        Street2 as string
+        Suburb as string
+        City as string
+        PostCode as string
+        Country as string
+    end class
+
+    Items as Collection of Item
+        Item as string
+        Quantity as integer
+        Price as single
+        Tax as single
+    end collection
+end class
+
+var invoices = db.QueryMapped<invoice>(new Type[]{typeof(Address), typeof(Item)}, callBackFunction, "exec dbo.Invoices")

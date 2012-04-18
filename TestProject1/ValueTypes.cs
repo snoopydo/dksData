@@ -155,13 +155,12 @@ namespace TestProject1
         [TestMethod()]
         public void ExecuteNonQuery()
         {
-            // how to handle this? 
-            // query parser sees @t and expects to see a parameter name t passed in....
-            Assert.AreEqual<int>(2, db.ExecuteNonQuery("declare @t table(i1 int, i2 int); insert into @t(i1,i2) select 1, 2 union all select 3,4"));
+            // db.CreateCommand unescapes @@variable
+            Assert.AreEqual<int>(2, db.ExecuteNonQuery("declare @@t table(i1 int, i2 int); insert into @@t(i1,i2) select 1, 2 union all select 3,4"));
 
-            //this works but will it continue too?
-            //Assert.AreEqual<int>(2, db.ExecuteNonQuery("declare @@t table(i1 int, i2 int); insert into @@t(i1,i2) select 1, 2 union all select 3,4"));
 
+            var results = db.Query<int>("declare @@t table(i1 int, i2 int); insert into @@t(i1,i2) select 1, 2 union all select 3,4; select i1 from @@t");
+            results.IsSequenceEqualTo(new[] { 1, 3 });
         }
         #endregion
     }
