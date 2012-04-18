@@ -148,6 +148,15 @@ namespace TestProject1
         {
             Assert.AreEqual<string>("Apple", db.ExecuteScalar<string>("select 'Apple', 'Bannana' union all select 'Flower','Friday'"));
         }
+
+        [TestMethod()]
+        public void ExecuteScalar_StringWithMacron()
+        {
+            string text = "Tēnā koutou! Ko Tīpene tāku ingoa.";
+            Assert.AreEqual<string>(text, db.ExecuteScalar<string>("select @0 ", text));
+        }
+
+
         #endregion
 
 
