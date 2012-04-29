@@ -68,30 +68,8 @@ namespace TestProject1
         #endregion
 
         [TestMethod()]
-        public void GetConnection_DefaultConnectionString()
+        public void Connection_GetConnection()
         {
-            System.Diagnostics.Debug.WriteLine("GetConnection_DefaultConnectionString");
-
-            string expectedConnectionString;
-            IDbConnection actual;
-
-            expectedConnectionString = ConfigurationManager.ConnectionStrings[0].ConnectionString;
-
-            actual = dksData.Database.GetConnection();
-
-            Assert.IsNotNull(actual);
-            Assert.AreEqual(actual.ConnectionString, expectedConnectionString);
-
-            // the default connection is normally a local sqlexpress connection string refering to aspnetdb.mdf in data directory which we probably dont have
-            //actual.Open();
-            //actual.Close();
-        }
-
-        [TestMethod()]
-        public void GetConnection_NamedConnectionString()
-        {
-            System.Diagnostics.Debug.WriteLine("GetConnection_NamedConnectionString");
-
             string connectionStringName;
             string expectedConnectionString;
             IDbConnection actual;
@@ -101,15 +79,48 @@ namespace TestProject1
 
             actual = dksData.Database.GetConnection(connectionStringName);
 
+            // we got a IDbConnection
             Assert.IsNotNull(actual);
+
+            // its using the correct connection string
             Assert.AreEqual(actual.ConnectionString, expectedConnectionString);
 
-            // being a named connection, we should be able to open and close it.
-            actual.Open();
-            actual.Close();
+            // it should be closed still
+            Assert.AreEqual(ConnectionState.Closed, actual.State);
 
+            // we should be able to open it
+            actual.Open();
+            Assert.AreEqual(ConnectionState.Open, actual.State);
+
+            // and close it again.
+            actual.Close();
+            Assert.AreEqual(ConnectionState.Closed, actual.State);
+            
         }
 
+        [TestMethod()]
+        public void Connection_GetOpenConnection()
+        {
+            string connectionStringName;
+            string expectedConnectionString;
+            IDbConnection actual;
+
+            connectionStringName = "test";
+            expectedConnectionString = ConfigurationManager.ConnectionStrings["test"].ConnectionString;
+
+            actual = dksData.Database.GetOpenConnection(connectionStringName);
+
+            // we got a IDbConnection
+            Assert.IsNotNull(actual);
+
+            // it should already be open
+            Assert.AreEqual(ConnectionState.Open, actual.State);
+
+            // and close it.
+            actual.Close();
+            Assert.AreEqual(ConnectionState.Closed, actual.State);
+
+        }
       
     }
 }

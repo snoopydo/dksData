@@ -17,20 +17,21 @@ namespace dksData
     {
 
         // todo: Implement cache expiry, clean up etc...
-        // todo: implement parameters for commandTimeout, commandType, openTransaction...?
+        // todo: implement parameters for commandTimeout, commandType, openTransaction, CommandBehavior type...?
         // todo: handle different variable prefixs in sql string. ie MySQL uses ? and Oracle use a :
+        // todo: implement fill dataset?
 
         #region GetConnection(...)
         // cache functions to create appropriate IDbConnection.
         private static ConcurrentDictionary<string, Func<IDbConnection>> dbFactoryCache = new ConcurrentDictionary<string, Func<IDbConnection>>();
 
-        public static IDbConnection GetConnection()
+
+        public static IDbConnection GetOpenConnection(string connectionStringName)
         {
-            string connectionStringName;
+            var db = GetConnection(connectionStringName);
+            db.Open();
 
-            connectionStringName = ConfigurationManager.ConnectionStrings[0].Name;
-
-            return GetConnection(connectionStringName);
+            return db;
         }
 
         public static IDbConnection GetConnection(string connectionStringName)
@@ -81,7 +82,8 @@ namespace dksData
         }
         #endregion
 
-        #region ExecuteScalar(...), ExecuteNonQuery(...)
+
+        #region ExecuteScalar(...), ExecuteNonQuery(...), ExecuteReader(...)
 
         public static T ExecuteScalar<T>(this IDbConnection db, string sql, params object[] parameters)
         {
@@ -114,9 +116,26 @@ namespace dksData
             }
         }
 
+        public static IDataReader ExecuteReader(this IDbConnection db, string sql, params object[] parameters)
+        {
+            using (var cmd = CreateCommand(db, sql, parameters))
+            {
+                //cmd.CommandTimeout = commandTimeout;
+                //cmd.CommandType = commandType;
+                //cmd.Transaction = transaction;
+                // pass in CommandBehavior
+
+                return cmd.ExecuteReader(CommandBehavior.CloseConnection);
+
+            }
+        }
+
         #endregion
 
         #region Query(...)
+
+        private static Dictionary<string, object> pocoFactories = new Dictionary<string, object>();
+
 
         // Query<T>(this IDbConnection db, string sql, params object[] parameters)
         // Query<TRet>(this IDbConnection db, Type[] types, object callback, string sql, params object[] parameters)
@@ -129,20 +148,18 @@ namespace dksData
 
                 using (var reader = cmd.ExecuteReader(CommandBehavior.CloseConnection))
                 {
+
                     Func<IDataReader, TRet> deserialiser = null;
 
-                    // build cache key
                     // this assumes query will allways return same query and not change result sets depending on parameters and there values...
-                    string key;
-                    key = db.ConnectionString;
-                    key += ":" + cmd.CommandText;
-
+                    string cacheKey;
+                    cacheKey = GetCacheKey(typeof(TRet), db, cmd, sql);
 
                     // look up cache
                     lock (pocoFactories)
                     {
                         object factory;
-                        if (pocoFactories.TryGetValue(key, out factory))
+                        if (pocoFactories.TryGetValue(cacheKey, out factory))
                         {
                             deserialiser = factory as Func<IDataReader, TRet>;
                         }
@@ -151,12 +168,12 @@ namespace dksData
                     if (deserialiser == null)
                     {
                         // make function
-                        deserialiser = GetDeserliser<TRet>(reader);
+                        deserialiser = GetDeserliser2<TRet>(reader);
 
                         // cache it
                         lock (pocoFactories)
                         {
-                            pocoFactories[key] = deserialiser;
+                            pocoFactories[cacheKey] = deserialiser;
                         }
                     }
 
@@ -167,314 +184,61 @@ namespace dksData
                     }
 
                     reader.Close();
-
                 }
 
             }
 
         }
 
+        private static string GetCacheKey(Type type, IDbConnection db, IDbCommand dc, string sql)
+        {
+            return type.ToString() + '-' + dc.CommandText + '-' + db.ConnectionString;
+        }
 
         #endregion
 
 
-        private static Func<IDataReader, TRet> GetDeserliser<TRet>(IDataReader reader)
+        private static Func<IDataReader, TRet> GetDeserliser2<TRet>(IDataReader reader)
         {
+
+            // for now, assume TRet is a class, we need to handle ints, string, structs etc...
+
             Type type = typeof(TRet);
-            
+
+            // tempary, need to implement proper handling of classes, sturcts, etc...
             if (type.IsValueType || type == typeof(string) || type == typeof(byte[]))
+            //if (1 == 2)
             {
                 return (rdr) => (TRet)rdr.GetValue(0);
             }
-
-            var dm = new DynamicMethod(string.Format("Deserialise{0}", Guid.NewGuid()), type, new[] { typeof(IDataReader) }, true);
-            var il = dm.GetILGenerator();
-
-            ParameterBuilder readerParameter = dm.DefineParameter(1, ParameterAttributes.None, "rdr");
-
-            GenerateMethodBody<TRet>(il, reader, 0, -1);
-
-            var factory = (Func<IDataReader, TRet>)dm.CreateDelegate(typeof(Func<IDataReader, TRet>));
-
-            return factory as Func<IDataReader, TRet>;
-
-        }
-
-
-
-        #region Internal Stuff
-
-
-        public static IDbCommand CreateCommand(IDbConnection db, string sql, params object[] parameters)
-        {
-            IDbCommand cmd;
-
-            // handle named/numbered etc parameters, fixing sql if required.
-            var new_parameters = new List<object>();
-            sql = ParseParameters(sql, parameters, new_parameters);
-            parameters = new_parameters.ToArray();
-
-            sql = sql.Replace("@@", "@");	// remove double escaped
-
-            cmd = db.CreateCommand();
-
-            cmd.CommandText = sql;
-            //cmd.CommandTimeout = commandTimeout;
-            //cmd.CommandType = commandType;
-            //cmd.Transaction = transaction;
-
-            foreach (var param in parameters)
-            {
-                AddParameter(cmd, param);
-            }
-
-            return cmd;
-        }
-
-        private static void AddParameter(IDbCommand cmd, object param)
-        {
-
-            IDbDataParameter p;
-            p = param as IDbDataParameter;
-
-            if (p != null)
-            {
-                cmd.Parameters.Add(p);
-                return;
-            }
-
-            p = cmd.CreateParameter();
-
-            p.ParameterName = cmd.Parameters.Count.ToString();
-            if (param == null)
-            {
-                p.Value = DBNull.Value;
-            }
             else
             {
-                p.Value = param;
 
-                // make strings a consistent size, helps with query plan caching.
-                if (param.GetType() == typeof(string) && p.Size < 4000)
-                {
-                    p.Size = 4000;
-                }
+                // define our custom method 
+                // static TRet DeserialiseXXXXX(reader) {}
+                var dm = new DynamicMethod(string.Format("Deserialise{0}", Guid.NewGuid()), type, new[] { typeof(IDataReader) }, true);
+                var il = dm.GetILGenerator();
+
+                // define local var for return type.
+                LocalBuilder returnItem = il.DeclareLocal(type);
+
+                il.GenerateMethodBlock(reader, 0, -1, returnItem);
+
+                // return item;
+                il.Emit(OpCodes.Ldloc, returnItem);
+                il.Emit(OpCodes.Ret);
+
+
+
+                // finish building/compile function.
+                var factory = (Func<IDataReader, TRet>)dm.CreateDelegate(typeof(Func<IDataReader, TRet>));
+
+                return factory;
             }
-
-            cmd.Parameters.Add(p);
-
         }
 
-
-
-        // flogged from TopTenSoftwares' PetaPoco
-        private static Regex rxParams = new Regex(@"(?<!@)@\w+", RegexOptions.Compiled);
-        private static string ParseParameters(string sql, object[] parameters, List<object> new_parameters)
+        private static void GenerateMethodBlock(this ILGenerator il, IDataReader reader, int startBound, int length, LocalBuilder item)
         {
-            return rxParams.Replace(sql, m =>
-            {
-                string param = m.Value.Substring(1);
-
-                object arg_val;
-
-                int paramIndex;
-                if (int.TryParse(param, out paramIndex))
-                {
-                    // Numbered parameter
-                    if (paramIndex < 0 || paramIndex >= parameters.Length)
-                        throw new ArgumentOutOfRangeException(string.Format("Parameter '@{0}' specified but only {1} parameters supplied (in `{2}`)", paramIndex, parameters.Length, sql));
-
-                    arg_val = parameters[paramIndex];
-                }
-                else
-                {
-                    // Look for a property on one of the arguments with this name
-                    bool found = false;
-                    arg_val = null;
-                    foreach (var o in parameters)
-                    {
-                        // find actual property name, could be different case to that was used in query.
-                        foreach (var prop in o.GetType().GetProperties())
-                        {
-                            if (prop.Name.ToLower() == param.ToLower())
-                            {
-                                param = prop.Name;
-                                break;
-                            }
-                        }
-
-                        var pi = o.GetType().GetProperty(param);
-                        if (pi != null)
-                        {
-                            arg_val = pi.GetValue(o, null);
-                            found = true;
-                            break;
-                        }
-                    }
-
-                    if (!found)
-                    {
-                        // is parameter a IDbDataParameter?
-                        IDbDataParameter dbP;
-                        foreach (var o in parameters)
-                        {
-                            dbP = o as IDbDataParameter;
-                            if (dbP != null)
-                            {
-                                if (dbP.ParameterName.ToLower() == param.ToLower())
-                                {
-                                    new_parameters.Add(o);
-                                    return "@" + param;
-                                }
-                            }
-                        }
-                    }
-
-                    if (!found)
-                        throw new ArgumentException(string.Format("Parameter '@{0}' specified but none of the passed arguments have a property with this name (in '{1}')", param, sql));
-                }
-
-                // Expand collections to parameter lists
-                if ((arg_val as System.Collections.IEnumerable) != null &&
-                    (arg_val as string) == null &&
-                    (arg_val as byte[]) == null)
-                {
-                    var sb = new StringBuilder();
-                    foreach (var i in arg_val as System.Collections.IEnumerable)
-                    {
-                        sb.Append((sb.Length == 0 ? "@" : ",@") + new_parameters.Count.ToString());
-                        new_parameters.Add(i);
-                    }
-                    return sb.ToString();
-                }
-                else
-                {
-                    new_parameters.Add(arg_val);
-                    return "@" + (new_parameters.Count - 1).ToString();
-                }
-            }
-            );
-        }
-
-
-
-        private static bool IsStructure(Type t)
-        {
-            //return t.IsValueType && !t.IsPrimitive && !t.IsEnum;
-            return t.IsValueType && !t.IsPrimitive && !t.Namespace.StartsWith("System") && !t.IsEnum;
-        }
-
-        #endregion
-
-
-
-        #region 'Old' code, still to refactor
-
-        #region "Internal Reader Deserliser"
-
-        private static Dictionary<string, object> pocoFactories = new Dictionary<string, object>();
-
-
-
-        //private static Func<IDataReader, T> GetDeserliser<T>(string key, IDataReader reader, int startBound, int length)
-        //{
-        //    // look up our cache.
-        //    lock (pocoFactories)
-        //    {
-        //        object factory;
-        //        if (pocoFactories.TryGetValue(key, out factory))
-        //        {
-        //            return factory as Func<IDataReader, T>;
-        //        }
-        //    }
-
-        //    Type iType = typeof(T);
-
-        //    // simple type?
-        //    if (iType.IsValueType || iType == typeof(string) || iType == typeof(byte[]))
-        //    {
-        //        return (rdr) => (T)rdr.GetValue(0);
-        //    }
-        //    else
-        //    {
-        //        var dm = new DynamicMethod(string.Format("Deserialize{0}", Guid.NewGuid()), iType, new[] { typeof(IDataReader) }, true);
-        //        var il = dm.GetILGenerator();
-        //        ParameterBuilder rdr = dm.DefineParameter(1, ParameterAttributes.None, "rdr");
-
-        //        GenerateMethodBody<T>(il, reader, startBound, length);
-
-        //        // cache custom method
-        //        var factory = (Func<IDataReader, T>)dm.CreateDelegate(typeof(Func<IDataReader, T>));
-        //        lock (pocoFactories)
-        //        {
-        //            pocoFactories[key] = factory;
-        //        }
-
-        //        return factory as Func<IDataReader, T>;
-        //    }
-        //}
-
-
-        //private static Func<IDataReader, T> GetClassDeserliser<T>(IDataReader reader)
-        //{
-        //    var dm = new DynamicMethod(string.Format("Deserialize{0}", Guid.NewGuid()), typeof(T), new[] { typeof(IDataReader) }, true);
-        //    var il = dm.GetILGenerator();
-        //    ParameterBuilder rdr = dm.DefineParameter(1, ParameterAttributes.None, "rdr");
-
-        //    GenerateMethodBody<T>(il, reader, 0, -1);
-
-        //    var factory = (Func<IDataReader, T>)dm.CreateDelegate(typeof(Func<IDataReader, T>));
-
-        //    return factory as Func<IDataReader, T>;
-        //}
-
-        //private static Func<IDataReader, T> GetValueTypeDeserliser<T>(IDataReader reader)
-        //{
-        //    return rdr =>
-        //    {
-        //        return (T)rdr.GetValue(0);
-        //    };
-        //}
-
-
-        #endregion
-
-        #region "Custom Object Deserliser(IL) Generation"
-        private static MethodInfo fnIsDBNull = typeof(IDataRecord).GetMethod("IsDBNull");
-        private static MethodInfo fnGetValue = typeof(IDataRecord).GetMethod("GetValue", new Type[] { typeof(int) });
-        private static MethodInfo fnGetString = typeof(IDataRecord).GetMethod("GetString", new Type[] { typeof(int) });
-        private static MethodInfo fnEnumParse = typeof(Enum).GetMethod("Parse", new Type[] { typeof(Type), typeof(string), typeof(bool) });
-        private static MethodInfo fnGuidParse = typeof(Guid).GetMethod("Parse", new Type[] { typeof(string) });
-        private static MethodInfo fnConvertChangeType = typeof(Convert).GetMethod("ChangeType", new Type[] { typeof(Object), typeof(Type) });
-
-
-
-        // todo: handle sturcts
-        private static void GenerateMethodBody<T>(ILGenerator il, IDataReader reader, int startBound, int length)
-        {
-            Type iType = typeof(T);
-
-            // get Properties and Fields of T that we should be able to set
-            var properties = iType
-                    .GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
-                    .Select(p => new
-                    {
-                        p.Name,
-                        Setter = p.DeclaringType == typeof(T) ? p.GetSetMethod(true) : p.DeclaringType.GetProperty(p.Name).GetSetMethod(true),
-                        PropertyType = p.PropertyType
-                    })
-                    .Where(info => info.Setter != null)
-                    .ToList();
-
-            var fields = iType.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
-                    .Select(f => new
-                    {
-                        f.Name,
-                        Setter = f,
-                        PropertyType = f.FieldType
-                    })
-                    .ToList();
-
             Type srcType;
             Type dstType;
             Type nullUnderlyingType;
@@ -492,29 +256,67 @@ namespace dksData
                 throw new ArgumentException("todo: fix me! When using the multi-mapping APIs ensure you set the splitOn param if you have keys other than Id", "splitOn");
             }
 
-            // <T> item;
-            LocalBuilder item = il.DeclareLocal(iType);
-            // int idx;
-            LocalBuilder idx = il.DeclareLocal(typeof(int));
-            //item.SetLocalSymInfo("item");
-            //idx.SetLocalSymInfo("idx");
-            //il.MarkSequencePoint(null, 1, 0, 1, 100);
-            
+            Type iType;
+            iType = item.LocalType;
+
+
+            // get Properties and Fields of T that we should be able to set
+            //var properties = GetSettableProperties(iType);
+            //var fields = GetSettableFields(iType);
+            var properties = iType
+                    .GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
+                    .Select(p => new
+                    {
+                        p.Name,
+                        Setter = p.DeclaringType == iType ? p.GetSetMethod(true) : p.DeclaringType.GetProperty(p.Name).GetSetMethod(true),
+                        PropertyType = p.PropertyType
+                    })
+                    .Where(info => info.Setter != null)
+                    .ToList();
+
+            var fields = iType.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
+                    .Select(f => new
+                    {
+                        f.Name,
+                        Setter = f,
+                        PropertyType = f.FieldType
+                    })
+                    .ToList();
+
+
             //try {
             il.BeginExceptionBlock();
 
+            // int idx;     // so we know the index into reader that caused us grief.
+            LocalBuilder idx = il.DeclareLocal(typeof(int));
+
+
             // item = new <T>();    // using public or private constructor.
             il.Emit(OpCodes.Newobj, iType.GetConstructor(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null, Type.EmptyTypes, null));	// <T>
-            il.Emit(OpCodes.Stloc, item);																		//
+            il.Emit(OpCodes.Stloc, item);										                                                                                //
+            
+            // for struct
+            //il.Emit(OpCodes.Ldloca, item);
+            //il.Emit(OpCodes.Initobj, iType);
 
+            // for structs this block kills it
             for (int i = startBound; i < startBound + length; i++)
             {
+                // get type for reader column(i)
+                // is there a matching property/field in item
+                //  assign with appropriate casting/boxing etc...
+
+                // ***************************************************************************************************************************************
+
                 // select matching property or field, ordering by properties (case sensitive, case insensitive) then fields (case sensitive, case insensitive)
                 var ps = new
                 {
                     prop = properties.FirstOrDefault(p => string.Equals(p.Name, reader.GetName(i), StringComparison.InvariantCulture)) ?? properties.FirstOrDefault(p => string.Equals(p.Name, reader.GetName(i), StringComparison.InvariantCultureIgnoreCase)),
-                    field = fields.FirstOrDefault(f => string.Equals(f.Name, reader.GetName(i), StringComparison.InvariantCulture)) ?? fields.FirstOrDefault(f => string.Equals(f.Name, reader.GetName(i), StringComparison.InvariantCultureIgnoreCase)),
+                    field = fields.FirstOrDefault(f => string.Equals(f.Name, reader.GetName(i), StringComparison.InvariantCulture)) ?? fields.FirstOrDefault(f => string.Equals(f.Name, reader.GetName(i), StringComparison.InvariantCultureIgnoreCase))
                 };
+
+
+
 
                 // did we find a matching property / field?
                 if (ps.prop == null && ps.field == null)
@@ -731,30 +533,265 @@ namespace dksData
                 }
                 //}
                 il.MarkLabel(lblNext);	// end of if(!reader.IsDBNull(i))
+
+                // ***************************************************************************************************************************************
             }
 
-
             //} catch (Exception ex) {
-            il.BeginCatchBlock(typeof(Exception));														// ex
+            il.BeginCatchBlock(typeof(Exception));														    // ex
 
-            // call db.ThrowDataException(Exception ex, int idx, IDataReader reader);
+            // db.ThrowDataException(Exception ex, int idx, IDataReader reader);
             il.Emit(OpCodes.Ldloc, idx);																	// ex, idx
-            il.Emit(OpCodes.Ldarg_0);																	// ex, idx, reader
+            il.Emit(OpCodes.Ldarg_0);                       												// ex, idx, reader
 
             il.EmitCall(OpCodes.Call, MethodInfo.GetCurrentMethod().DeclaringType.GetMethod("ThrowDataException", BindingFlags.Static | BindingFlags.NonPublic), null);
 
             // item = null;
-            il.Emit(OpCodes.Ldnull);																	// ex, null
+            il.Emit(OpCodes.Ldnull);																	    // ex, null
             il.Emit(OpCodes.Stloc, item);																	// ex
 
             //}
             il.EndExceptionBlock();
 
-            // return item;
-            il.Emit(OpCodes.Ldloc, item);
-            il.Emit(OpCodes.Ret);
+        }
+
+
+
+
+
+
+
+
+        #region Internal Stuff
+
+
+        public static IDbCommand CreateCommand(IDbConnection db, string sql, params object[] parameters)
+        {
+            IDbCommand cmd;
+
+            // handle named/numbered etc parameters, fixing sql if required.
+            var new_parameters = new List<object>();
+            sql = ParseParameters(sql, parameters, new_parameters);
+            parameters = new_parameters.ToArray();
+
+            sql = sql.Replace("@@", "@");	// remove double escaped
+
+            cmd = db.CreateCommand();
+
+            cmd.CommandText = sql;
+            //cmd.CommandTimeout = commandTimeout;
+            //cmd.CommandType = commandType;
+            //cmd.Transaction = transaction;
+
+            foreach (var param in parameters)
+            {
+                AddParameter(cmd, param);
+            }
+
+            return cmd;
+        }
+
+        private static void AddParameter(IDbCommand cmd, object param)
+        {
+
+            IDbDataParameter p;
+            p = param as IDbDataParameter;
+
+            if (p != null)
+            {
+                cmd.Parameters.Add(p);
+                return;
+            }
+
+            p = cmd.CreateParameter();
+
+            p.ParameterName = cmd.Parameters.Count.ToString();
+            if (param == null)
+            {
+                p.Value = DBNull.Value;
+            }
+            else
+            {
+                p.Value = param;
+
+                // make strings a consistent size, helps with query plan caching.
+                if (param.GetType() == typeof(string) && p.Size < 4000)
+                {
+                    p.Size = 4000;
+                }
+            }
+
+            cmd.Parameters.Add(p);
 
         }
+
+
+        #region Query parameter parsing
+        // flogged from TopTenSoftwares' PetaPoco and tweeked to handle parameters that are already of type IDbDataParameter
+
+        private static Regex rxParams = new Regex(@"(?<!@)@\w+", RegexOptions.Compiled);
+        private static string ParseParameters(string sql, object[] parameters, List<object> new_parameters)
+        {
+            return rxParams.Replace(sql, m =>
+            {
+                string param = m.Value.Substring(1);
+
+                object arg_val;
+
+                int paramIndex;
+                if (int.TryParse(param, out paramIndex))
+                {
+                    // Numbered parameter
+                    if (paramIndex < 0 || paramIndex >= parameters.Length)
+                        throw new ArgumentOutOfRangeException(string.Format("Parameter '@{0}' specified but only {1} parameters supplied (in `{2}`)", paramIndex, parameters.Length, sql));
+
+                    arg_val = parameters[paramIndex];
+                }
+                else
+                {
+                    // Look for a property on one of the arguments with this name
+                    bool found = false;
+                    arg_val = null;
+                    foreach (var o in parameters)
+                    {
+                        // find actual property name, could be different case to that was used in query.
+                        foreach (var prop in o.GetType().GetProperties())
+                        {
+                            if (prop.Name.ToLower() == param.ToLower())
+                            {
+                                param = prop.Name;
+                                break;
+                            }
+                        }
+
+                        var pi = o.GetType().GetProperty(param);
+                        if (pi != null)
+                        {
+                            arg_val = pi.GetValue(o, null);
+                            found = true;
+                            break;
+                        }
+                    }
+
+                    if (!found)
+                    {
+                        // is parameter a IDbDataParameter?
+                        IDbDataParameter dbP;
+                        foreach (var o in parameters)
+                        {
+                            dbP = o as IDbDataParameter;
+                            if (dbP != null)
+                            {
+                                if (dbP.ParameterName.ToLower() == param.ToLower())
+                                {
+                                    new_parameters.Add(o);
+                                    return "@" + param;
+                                }
+                            }
+                        }
+                    }
+
+                    if (!found)
+                        throw new ArgumentException(string.Format("Parameter '@{0}' specified but none of the passed arguments have a property with this name (in '{1}')", param, sql));
+                }
+
+                // Expand collections to parameter lists
+                if ((arg_val as System.Collections.IEnumerable) != null &&
+                    (arg_val as string) == null &&
+                    (arg_val as byte[]) == null)
+                {
+                    var sb = new StringBuilder();
+                    foreach (var i in arg_val as System.Collections.IEnumerable)
+                    {
+                        sb.Append((sb.Length == 0 ? "@" : ",@") + new_parameters.Count.ToString());
+                        new_parameters.Add(i);
+                    }
+                    return sb.ToString();
+                }
+                else
+                {
+                    new_parameters.Add(arg_val);
+                    return "@" + (new_parameters.Count - 1).ToString();
+                }
+            }
+            );
+        }
+
+        #endregion
+
+        #region Get Settable Fields & Properties
+        // Get fields & properties that we can assign to.  
+        // We could extend these to look at custom attributes to handle mapping names to fields from database queries.
+
+        private struct settableProperty
+        {
+            public string Name;
+            public Type PropertyType;
+            public MethodInfo Setter;
+        }
+
+        private struct settableField
+        {
+            public string Name;
+            public Type PropertyType;
+            public FieldInfo Setter;
+        }
+
+
+        private static List<settableProperty> GetSettableProperties(Type iType)
+        {
+            var properties = iType
+                    .GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
+                    .Select(p => new settableProperty
+                    {
+                        Name = p.Name,
+                        Setter = p.DeclaringType == iType ? p.GetSetMethod(true) : p.DeclaringType.GetProperty(p.Name).GetSetMethod(true),
+                        PropertyType = p.PropertyType
+                    })
+                    .Where(info => info.Setter != null)
+                    .ToList();
+
+
+            return properties;
+        }
+
+        private static List<settableField> GetSettableFields(Type iType)
+        {
+            var fields = iType.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
+                     .Select(f => new settableField
+                     {
+                         Name = f.Name,
+                         Setter = f,
+                         PropertyType = f.FieldType
+                     })
+                     .ToList();
+
+
+            return fields;
+        }
+
+        #endregion
+
+
+        #endregion
+
+
+
+        #region 'Old' code, still to refactor
+
+
+
+        #region "Custom Object Deserliser(IL) Generation"
+        private static MethodInfo fnIsDBNull = typeof(IDataRecord).GetMethod("IsDBNull");
+        private static MethodInfo fnGetValue = typeof(IDataRecord).GetMethod("GetValue", new Type[] { typeof(int) });
+        private static MethodInfo fnGetString = typeof(IDataRecord).GetMethod("GetString", new Type[] { typeof(int) });
+        private static MethodInfo fnEnumParse = typeof(Enum).GetMethod("Parse", new Type[] { typeof(Type), typeof(string), typeof(bool) });
+        private static MethodInfo fnGuidParse = typeof(Guid).GetMethod("Parse", new Type[] { typeof(string) });
+        private static MethodInfo fnConvertChangeType = typeof(Convert).GetMethod("ChangeType", new Type[] { typeof(Object), typeof(Type) });
+
+
+
+
 
         private static void ThrowDataException(Exception ex, int index, IDataReader reader)
         {
@@ -809,6 +846,12 @@ namespace dksData
 
             }
             return false;
+        }
+
+        private static bool IsStructure(Type t)
+        {
+            //return t.IsValueType && !t.IsPrimitive && !t.IsEnum;
+            return t.IsValueType && !t.IsPrimitive && !t.Namespace.StartsWith("System") && !t.IsEnum;
         }
 
         private static void EmitInt32(ILGenerator il, int value)

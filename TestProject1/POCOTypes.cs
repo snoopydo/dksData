@@ -59,8 +59,7 @@ namespace TestProject1
         [TestInitialize()]
         public void MyTestInitialize()
         {
-            db = dksData.Database.GetConnection("test");
-            db.Open();
+            db = dksData.Database.GetOpenConnection("test");
         }
 
         //Use TestCleanup to run code after each test has run
@@ -109,6 +108,11 @@ namespace TestProject1
             public float? Weight { get; set; }
 
             public int IgnoredProperty { get { return 1; } }
+        }
+
+        private Cat d()
+        {
+            return new Cat();
         }
 
         [TestMethod()]

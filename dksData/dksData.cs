@@ -196,7 +196,7 @@ namespace dksData2
             try
             {
                 //todo: using connectionStrings provider name, create appropriate connection...
-                db = dksData.Database.GetConnection(connection);
+                db = dksData.Database.GetOpenConnection(connection);
                 db.Open();
 
                 dc = db.CreateCommand();
@@ -223,7 +223,7 @@ namespace dksData2
         //private static IEnumerable<T> QueryInternal<T>(string connection, CommandType type, string sql, int timeout, params System.Data.IDbDataParameter[] parameters) where T : new()
         private static IEnumerable<T> QueryInternal<T>(string connection, CommandType type, string sql, int timeout, params System.Data.IDbDataParameter[] parameters)
         {
-            using (var db = dksData.Database.GetConnection(connection))
+            using (var db = dksData.Database.GetOpenConnection(connection))
             {
                 db.Open();
 
