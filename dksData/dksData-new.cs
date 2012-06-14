@@ -848,11 +848,17 @@ namespace dksData
             return false;
         }
 
-        private static bool IsStructure(Type t)
-        {
-            //return t.IsValueType && !t.IsPrimitive && !t.IsEnum;
-            return t.IsValueType && !t.IsPrimitive && !t.Namespace.StartsWith("System") && !t.IsEnum;
-        }
+		private static bool IsStructure(Type t)
+		{
+			//return t.IsValueType && !t.IsPrimitive && !t.IsEnum;
+			//return t.IsValueType && !t.IsPrimitive && !t.Namespace.StartsWith("System") && !t.IsEnum;
+
+			if (t.IsValueType == true && t.IsEnum == false && t.IsPrimitive == false)
+				return true;
+			else
+				return false;
+
+		}
 
         private static void EmitInt32(ILGenerator il, int value)
         {
