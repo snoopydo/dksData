@@ -100,7 +100,7 @@ namespace TestProject1
                 .IsEqualTo(guid);
         }
 
-        struct Cat
+        class Cat
         {
             public int? Age { get; set; }
             public Guid Id { get; set; }

@@ -43,6 +43,7 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
+    <Content Include="flow.txt" />
     <Content Include="notes.txt" />
     <Content Include="ToDo.txt" />
   </ItemGroup>

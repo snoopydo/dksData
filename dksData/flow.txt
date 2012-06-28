@@ -1,0 +1,62 @@
+
+
+var db = GetOpenConnection(connectionName)
+
+db.ExecuteScaler(...)
+db.ExecuteNonQuery(...)
+db.ExecuteReader(...)
+
+
+
+
+==========================
+db.Query(...)
+
+	// using ds = db.executereader(...)
+
+	// 	create cache key
+	// 	check cache
+	// 	if not found
+	//		build function(ds,type)
+	//		cache it
+	// 	end if
+
+	// 	do while ds.read
+			yield return function(ds)
+	// 	loop
+
+	//	ds.close
+
+	// end using
+
+
+
+===========================
+build function(ds, type[])
+
+	// create method il generator
+
+	// for each type in type[]
+	//	declare localvar for type
+	//	find start, stop of split
+	//	build2(localvar, type, ds, start, stop)
+	// next
+
+	// push type vars onto stack
+	// call callback to map
+
+	// close method
+
+	// return function
+
+===============================
+build2(localvar, type, ds, start, stop)
+
+	// create instance of localvar
+
+	// for x = start to stop
+	//	if ds(x).name = localvar[field/property] then
+	//		assignvalue
+	//	end if
+	// next
+	

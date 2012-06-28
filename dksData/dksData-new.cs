@@ -137,7 +137,7 @@ namespace dksData
         private static Dictionary<string, object> pocoFactories = new Dictionary<string, object>();
 
 
-        // Query<T>(this IDbConnection db, string sql, params object[] parameters)
+        // Query<TRet>(this IDbConnection db, string sql, params object[] parameters)
         // Query<TRet>(this IDbConnection db, Type[] types, object callback, string sql, params object[] parameters)
 
         public static IEnumerable<TRet> Query<TRet>(this IDbConnection db, string sql, params object[] parameters)
@@ -207,8 +207,12 @@ namespace dksData
 
             // tempary, need to implement proper handling of classes, sturcts, etc...
             if (type.IsValueType || type == typeof(string) || type == typeof(byte[]))
-            //if (1 == 2)
             {
+                return (rdr) => (TRet)rdr.GetValue(0);
+            }
+            else if (IsStructure(type))
+            {
+                // is rubbish, need to build method similar to that for handling classes below.
                 return (rdr) => (TRet)rdr.GetValue(0);
             }
             else
@@ -229,7 +233,6 @@ namespace dksData
                 il.Emit(OpCodes.Ret);
 
 
-
                 // finish building/compile function.
                 var factory = (Func<IDataReader, TRet>)dm.CreateDelegate(typeof(Func<IDataReader, TRet>));
 
@@ -246,6 +249,9 @@ namespace dksData
             MethodInfo fnGetMethod;
             Label lblNext;
 
+
+
+
             if (length == -1)
             {
                 length = reader.FieldCount - startBound;
@@ -261,27 +267,8 @@ namespace dksData
 
 
             // get Properties and Fields of T that we should be able to set
-            //var properties = GetSettableProperties(iType);
-            //var fields = GetSettableFields(iType);
-            var properties = iType
-                    .GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
-                    .Select(p => new
-                    {
-                        p.Name,
-                        Setter = p.DeclaringType == iType ? p.GetSetMethod(true) : p.DeclaringType.GetProperty(p.Name).GetSetMethod(true),
-                        PropertyType = p.PropertyType
-                    })
-                    .Where(info => info.Setter != null)
-                    .ToList();
-
-            var fields = iType.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
-                    .Select(f => new
-                    {
-                        f.Name,
-                        Setter = f,
-                        PropertyType = f.FieldType
-                    })
-                    .ToList();
+            var properties = GetSettableProperties(iType);
+            var fields = GetSettableFields(iType);
 
 
             //try {
@@ -294,7 +281,7 @@ namespace dksData
             // item = new <T>();    // using public or private constructor.
             il.Emit(OpCodes.Newobj, iType.GetConstructor(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null, Type.EmptyTypes, null));	// <T>
             il.Emit(OpCodes.Stloc, item);										                                                                                //
-            
+
             // for struct
             //il.Emit(OpCodes.Ldloca, item);
             //il.Emit(OpCodes.Initobj, iType);
@@ -314,9 +301,6 @@ namespace dksData
                     prop = properties.FirstOrDefault(p => string.Equals(p.Name, reader.GetName(i), StringComparison.InvariantCulture)) ?? properties.FirstOrDefault(p => string.Equals(p.Name, reader.GetName(i), StringComparison.InvariantCultureIgnoreCase)),
                     field = fields.FirstOrDefault(f => string.Equals(f.Name, reader.GetName(i), StringComparison.InvariantCulture)) ?? fields.FirstOrDefault(f => string.Equals(f.Name, reader.GetName(i), StringComparison.InvariantCultureIgnoreCase))
                 };
-
-
-
 
                 // did we find a matching property / field?
                 if (ps.prop == null && ps.field == null)
@@ -723,14 +707,14 @@ namespace dksData
         // Get fields & properties that we can assign to.  
         // We could extend these to look at custom attributes to handle mapping names to fields from database queries.
 
-        private struct settableProperty
+        private class settableProperty
         {
             public string Name;
             public Type PropertyType;
             public MethodInfo Setter;
         }
 
-        private struct settableField
+        private class settableField
         {
             public string Name;
             public Type PropertyType;
