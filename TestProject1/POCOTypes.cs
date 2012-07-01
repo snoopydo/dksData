@@ -131,5 +131,42 @@ namespace TestProject1
                 .IsEqualTo(guid);
         }
 
+		private static bool IsStructure(Type t)
+		{
+			//return t.IsValueType && !t.IsPrimitive && !t.IsEnum;
+			//return t.IsValueType && !t.IsPrimitive && !t.Namespace.StartsWith("System") && !t.IsEnum;
+
+			if (t.IsValueType == true && t.IsEnum == false && t.IsPrimitive==false)
+				return true;
+			else
+				return false;
+
+
+		}
+
+		[TestMethod()]
+		public void TestIsStructure()
+		{
+			Type t;
+			DateTime dt;
+
+			dt = DateTime.Now;
+
+			t = typeof(Cat); IsStructure(t).IsTrue();			// struct
+
+			t = typeof(Dog); IsStructure(t).IsFalse();			// class
+
+			t = typeof(DateTime); IsStructure(t).IsTrue();		// struct
+
+			t = typeof(DateTimeKind); IsStructure(t).IsFalse();	// enum
+
+			t = typeof(string); IsStructure(t).IsFalse();		// class
+			t = typeof(String); IsStructure(t).IsFalse();		// class
+
+			t = typeof(int); IsStructure(t).IsFalse();			// primative
+
+
+		}
+
     }
 }
