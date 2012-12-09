@@ -39,7 +39,10 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="dksData-new.cs" />
+    <Compile Include="dksData.ExecuteXXX.cs" />
     <Compile Include="dksData.cs" />
+    <Compile Include="dksData.GetCommand.cs" />
+    <Compile Include="dksData.GetConnection.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
