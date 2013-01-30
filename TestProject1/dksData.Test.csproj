@@ -51,7 +51,7 @@
   <ItemGroup>
     <Compile Include="AssertHelpers.cs" />
     <Compile Include="Class1.cs" />
-    <Compile Include="Connections.cs" />
+    <Compile Include="dksData.GetConnection.Tests.cs" />
     <Compile Include="ExecuteScalar.cs" />
     <Compile Include="POCOTypes.cs" />
     <Compile Include="ValueTypes.cs" />
