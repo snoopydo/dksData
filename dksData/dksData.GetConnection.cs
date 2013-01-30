@@ -64,7 +64,7 @@ namespace dksData
 					};
 				}
 
-				//dbFactoryCache[connectionStringName.ToLower()] = createConnection;
+				dbFactoryCache[connectionStringName.ToLower()] = createConnection;
 
 			}
 
