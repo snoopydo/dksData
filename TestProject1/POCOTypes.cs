@@ -144,29 +144,29 @@ namespace TestProject1
 
 		}
 
-		[TestMethod()]
-		public void TestIsStructure()
-		{
-			Type t;
-			DateTime dt;
+		//[TestMethod()]
+		//public void TestIsStructure()
+		//{
+		//	Type t;
+		//	DateTime dt;
 
-			dt = DateTime.Now;
+		//	dt = DateTime.Now;
 
-			t = typeof(Cat); IsStructure(t).IsTrue();			// struct
+		//	t = typeof(Cat); IsStructure(t).IsTrue();			// struct
 
-			t = typeof(Dog); IsStructure(t).IsFalse();			// class
+		//	t = typeof(Dog); IsStructure(t).IsFalse();			// class
 
-			t = typeof(DateTime); IsStructure(t).IsTrue();		// struct
+		//	t = typeof(DateTime); IsStructure(t).IsTrue();		// struct
 
-			t = typeof(DateTimeKind); IsStructure(t).IsFalse();	// enum
+		//	t = typeof(DateTimeKind); IsStructure(t).IsFalse();	// enum
 
-			t = typeof(string); IsStructure(t).IsFalse();		// class
-			t = typeof(String); IsStructure(t).IsFalse();		// class
+		//	t = typeof(string); IsStructure(t).IsFalse();		// class
+		//	t = typeof(String); IsStructure(t).IsFalse();		// class
 
-			t = typeof(int); IsStructure(t).IsFalse();			// primative
+		//	t = typeof(int); IsStructure(t).IsFalse();			// primative
 
 
-		}
+		//}
 
     }
 }
