@@ -11,10 +11,10 @@ namespace dksData
 	public static partial class Database
 	{
 		
-		public static IEnumerable<TRet> Query<TRet>(this IDbConnection db, string sql, params object[] parameters)
-		{
-			return new List<TRet>();
-		}
+		//public static IEnumerable<TRet> Query<TRet>(this IDbConnection db, string sql, params object[] parameters)
+		//{
+		//	return new List<TRet>();
+		//}
 
 	}
 }
