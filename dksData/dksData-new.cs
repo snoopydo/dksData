@@ -215,13 +215,13 @@ namespace dksData
 				// if(!reader.IsDBNull(i))																	// [Stack]
 				// {
 				il.Emit(OpCodes.Ldarg_0);																	// reader
-				EmitInt32(il, i);																			// reader, i
+				il.EmitFastInt(i);																			// reader, i
 
 				// idx = i;
 				il.Emit(OpCodes.Dup);																		// reader, i, i
 				il.Emit(OpCodes.Stloc, idx);																// reader, i
 
-				il.Emit(OpCodes.Callvirt, fnIsDBNull);														// [bool]
+				il.Emit(OpCodes.Callvirt, Functions.IsDBNull);												// [bool]
 				lblNext = il.DefineLabel();
 				il.Emit(OpCodes.Brtrue_S, lblNext);															//
 
@@ -231,7 +231,7 @@ namespace dksData
 				{
 					il.Emit(OpCodes.Ldloc, item);															// <T>
 					il.Emit(OpCodes.Ldarg_0);																// <T>, reader 
-					EmitInt32(il, i);																		// <T>, reader, i
+					il.EmitFastInt(i);																		// <T>, reader, i
 
 					if (fnGetMethod != null)
 					{
@@ -240,7 +240,7 @@ namespace dksData
 					else
 					{
 						// getValue, unbox
-						il.Emit(OpCodes.Callvirt, fnGetValue);												// <T>, [value as object]
+						il.Emit(OpCodes.Callvirt, Functions.GetValue);												// <T>, [value as object]
 						il.Emit(OpCodes.Unbox_Any, dstType);												// <T>, [value as type]
 					}
 
@@ -267,11 +267,11 @@ namespace dksData
 					{
 						if (IsNumericType(srcType))
 						{
-							il.Emit(OpCodes.Ldloc, item);														// <T>
+							il.Emit(OpCodes.Ldloc, item);													// <T>
 							il.Emit(OpCodes.Ldarg_0);														// <T>, reader 
-							EmitInt32(il, i);																// <T>, reader, i
+							il.EmitFastInt(i);																// <T>, reader, i
 
-							il.Emit(OpCodes.Callvirt, fnGetValue);											// <T>, [value as object]
+							il.Emit(OpCodes.Callvirt, Functions.GetValue);									// <T>, [value as object]
 							il.Emit(OpCodes.Unbox_Any, typeof(int));										// <T>, [value as type]
 
 							if (nullUnderlyingType != null)
@@ -291,7 +291,7 @@ namespace dksData
 						}
 						else if (srcType == typeof(string))
 						{
-							il.Emit(OpCodes.Ldloc, item);														// <T>
+							il.Emit(OpCodes.Ldloc, item);													// <T>
 
 							if (nullUnderlyingType != null)
 							{
@@ -301,14 +301,14 @@ namespace dksData
 							{
 								il.Emit(OpCodes.Ldtoken, dstType);											// <T>, token
 							}
-							il.EmitCall(OpCodes.Call, typeof(Type).GetMethod("GetTypeFromHandle"), null);	// <T>, dstType/nullUnderlyingType
+							il.EmitCall(OpCodes.Call, Functions.GetTypeFromHandle, null);					// <T>, dstType/nullUnderlyingType
 
 							il.Emit(OpCodes.Ldarg_0);														// <T>, dstType/nullUnderlyingType, reader 
-							EmitInt32(il, i);																// <T>, dstType/nullUnderlyingType, reader, i
-							il.Emit(OpCodes.Callvirt, fnGetString);											// <T>, dstType/nullUnderlyingType, [value as String]
-							EmitInt32(il, 1);																// <T>, dstType/nullUnderlyingType, [value as String], true
+							il.EmitFastInt(i);																// <T>, dstType/nullUnderlyingType, reader, i
+							il.Emit(OpCodes.Callvirt, Functions.GetString);									// <T>, dstType/nullUnderlyingType, [value as String]
+							il.EmitFastInt(1);																// <T>, dstType/nullUnderlyingType, [value as String], true
 
-							il.EmitCall(OpCodes.Call, fnEnumParse, null);									// <T>, enum
+							il.EmitCall(OpCodes.Call, Functions.EnumParse, null);							// <T>, enum
 							il.Emit(OpCodes.Unbox_Any, dstType);											// <T>, [enum as dstType]
 
 							if (ps.prop != null)
@@ -326,11 +326,11 @@ namespace dksData
 					{
 						// String => Uri
 
-						il.Emit(OpCodes.Ldloc, item);															// <T>
+						il.Emit(OpCodes.Ldloc, item);														// <T>
 						il.Emit(OpCodes.Ldarg_0);															// <T>, reader 
-						EmitInt32(il, i);																	// <T>, reader, i
+						il.EmitFastInt(i);																	// <T>, reader, i
 
-						il.Emit(OpCodes.Callvirt, fnGetString);												// <T>, [string]
+						il.Emit(OpCodes.Callvirt, Functions.GetString);										// <T>, [string]
 						il.Emit(OpCodes.Newobj, typeof(Uri).GetConstructor(new[] { typeof(string) }));		// <T>, [Uri]
 
 						if (ps.prop != null)
@@ -347,12 +347,12 @@ namespace dksData
 					{
 						// String => Guid
 
-						il.Emit(OpCodes.Ldloc, item);															// <T>
+						il.Emit(OpCodes.Ldloc, item);														// <T>
 						il.Emit(OpCodes.Ldarg_0);															// <T>, reader 
-						EmitInt32(il, i);																	// <T>, reader, i
+						il.EmitFastInt(i);																	// <T>, reader, i
 
-						il.Emit(OpCodes.Callvirt, fnGetString);												// <T>, [value as string]
-						il.EmitCall(OpCodes.Call, fnGuidParse, null);										// <T>, guid
+						il.Emit(OpCodes.Callvirt, Functions.GetString);										// <T>, [value as string]
+						il.EmitCall(OpCodes.Call, Functions.GuidParse, null);								// <T>, guid
 
 						if (nullUnderlyingType != null)
 						{
@@ -372,18 +372,18 @@ namespace dksData
 					{
 
 						// o = reader.GetValue(i);
-						il.Emit(OpCodes.Ldloc, item);															// <T>
+						il.Emit(OpCodes.Ldloc, item);														// <T>
 						il.Emit(OpCodes.Ldarg_0);															// <T>, reader 
-						EmitInt32(il, i);																	// <T>, reader, i
-						il.Emit(OpCodes.Callvirt, fnGetValue);												// <T>, [value as object]
+						il.EmitFastInt(i);																	// <T>, reader, i
+						il.Emit(OpCodes.Callvirt, Functions.GetValue);										// <T>, [value as object]
 
 						//  = (dstType) Convert.ChangeType(o, typeof(dstType/nullUnderlyingType);
 						if (nullUnderlyingType != null)
 						{
 							il.Emit(OpCodes.Ldtoken, nullUnderlyingType);
-							il.EmitCall(OpCodes.Call, typeof(Type).GetMethod("GetTypeFromHandle"), null);	// <T>, value, type(nullUnderlyingType)
+							il.EmitCall(OpCodes.Call, Functions.GetTypeFromHandle, null);					// <T>, value, type(nullUnderlyingType)
 
-							il.Emit(OpCodes.Call, fnConvertChangeType);										// <T>, [value as object of nullUnderlyingType]	
+							il.Emit(OpCodes.Call, Functions.ConvertChangeType);								// <T>, [value as object of nullUnderlyingType]	
 							il.Emit(OpCodes.Unbox_Any, nullUnderlyingType);									// <T>, [value as nullUnderlyingType)
 
 							il.Emit(OpCodes.Newobj, dstType.GetConstructor(new[] { nullUnderlyingType }));	// <T>, [value as dstType]
@@ -392,9 +392,9 @@ namespace dksData
 						else
 						{
 							il.Emit(OpCodes.Ldtoken, dstType);
-							il.EmitCall(OpCodes.Call, typeof(Type).GetMethod("GetTypeFromHandle"), null);	// <T>, value, type(dstType)
+							il.EmitCall(OpCodes.Call, Functions.GetTypeFromHandle, null);					// <T>, value, type(dstType)
 
-							il.Emit(OpCodes.Call, fnConvertChangeType);										// <T>, [value as object of dstType]	
+							il.Emit(OpCodes.Call, Functions.ConvertChangeType);								// <T>, [value as object of dstType]	
 							il.Emit(OpCodes.Unbox_Any, dstType);											// <T>, [value as dstType)
 
 						}
@@ -450,12 +450,7 @@ namespace dksData
 
 
 		#region "Custom Object Deserliser(IL) Generation"
-		private static MethodInfo fnIsDBNull = typeof(IDataRecord).GetMethod("IsDBNull");
-		private static MethodInfo fnGetValue = typeof(IDataRecord).GetMethod("GetValue", new Type[] { typeof(int) });
-		private static MethodInfo fnGetString = typeof(IDataRecord).GetMethod("GetString", new Type[] { typeof(int) });
-		private static MethodInfo fnEnumParse = typeof(Enum).GetMethod("Parse", new Type[] { typeof(Type), typeof(string), typeof(bool) });
-		private static MethodInfo fnGuidParse = typeof(Guid).GetMethod("Parse", new Type[] { typeof(string) });
-		private static MethodInfo fnConvertChangeType = typeof(Convert).GetMethod("ChangeType", new Type[] { typeof(Object), typeof(Type) });
+	
 
 
 
@@ -528,34 +523,11 @@ namespace dksData
 
 		}
 
-		private static void EmitInt32(ILGenerator il, int value)
-		{
-			switch (value)
-			{
-				case -1: il.Emit(OpCodes.Ldc_I4_M1); break;
-				case 0: il.Emit(OpCodes.Ldc_I4_0); break;
-				case 1: il.Emit(OpCodes.Ldc_I4_1); break;
-				case 2: il.Emit(OpCodes.Ldc_I4_2); break;
-				case 3: il.Emit(OpCodes.Ldc_I4_3); break;
-				case 4: il.Emit(OpCodes.Ldc_I4_4); break;
-				case 5: il.Emit(OpCodes.Ldc_I4_5); break;
-				case 6: il.Emit(OpCodes.Ldc_I4_6); break;
-				case 7: il.Emit(OpCodes.Ldc_I4_7); break;
-				case 8: il.Emit(OpCodes.Ldc_I4_8); break;
-				default:
-					if (value >= -128 && value <= 127)
-					{
-						il.Emit(OpCodes.Ldc_I4_S, (sbyte)value);
-					}
-					else
-					{
-						il.Emit(OpCodes.Ldc_I4, value);
-					}
-					break;
-			}
-		}
+		
 
 		#endregion
 		#endregion
+
+
 	}
 }

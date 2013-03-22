@@ -38,6 +38,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="dksData.Helpers.cs" />
     <Compile Include="dksData-new.cs" />
     <Compile Include="dksData.ExecuteXXX.cs" />
     <Compile Include="dksData.GetCommand.cs" />
