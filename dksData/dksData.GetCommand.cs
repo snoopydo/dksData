@@ -11,6 +11,7 @@ namespace dksData
 	public static partial class Database
 	{
 
+		[System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Security", "CA2100:Review SQL queries for security vulnerabilities")]
 		public static IDbCommand CreateCommand(IDbConnection db, string sql, params object[] parameters)
 		{
 			IDbCommand cmd;
