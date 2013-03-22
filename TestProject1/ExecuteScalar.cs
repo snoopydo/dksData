@@ -36,7 +36,8 @@ namespace TestProject1
             using (IDbConnection db = Database.GetOpenConnection("test"))
             {
                 var actual = db.ExecuteScalar<int?>("select 1");
-                Assert.AreEqual(1, actual);
+				Assert.IsTrue(actual.HasValue);
+                Assert.AreEqual(1, actual.Value);
 
             }
         }
