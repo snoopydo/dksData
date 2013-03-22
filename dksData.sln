@@ -1,6 +1,6 @@
 ﻿
-Microsoft Visual Studio Solution File, Format Version 11.00
-# Visual Studio 2010
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 2012
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "dksData", "dksData\dksData.csproj", "{2A722597-B87A-46B0-8D4B-A4A67E89E52C}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "dksData.Test", "TestProject1\dksData.Test.csproj", "{81ECC2FA-449D-49D3-8C9A-A7E52DB75C91}"
@@ -8,6 +8,7 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{886FD27D-66D5-4E66-8A0D-6815B5A891A7}"
 	ProjectSection(SolutionItems) = preProject
 		db.cs = db.cs
+		dksData.cs = dksData.cs
 		dksData.vsmdi = dksData.vsmdi
 		Local.testsettings = Local.testsettings
 		TraceAndTestImpact.testsettings = TraceAndTestImpact.testsettings
