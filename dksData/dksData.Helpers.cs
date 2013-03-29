@@ -11,7 +11,7 @@ namespace dksData
 {
 	static class Extensions
 	{
-		
+
 		public static void EmitFastInt(this ILGenerator il, int value)
 		{
 			switch (value)
@@ -39,7 +39,27 @@ namespace dksData
 			}
 		}
 
+		public static void EmitMemberAssignment(this ILGenerator il, Type item, Database.Setter setter)
+		{
+			if (setter.prop != null)
+			{
+				if (item.IsValueType)
+				{
+					il.Emit(OpCodes.Call, setter.prop.Setter);
+				}
+				else
+				{
+					il.Emit(OpCodes.Callvirt, setter.prop.Setter);
+				}
+			}
+			else
+			{
+				il.Emit(OpCodes.Stfld, setter.field.Setter);
+			}
+		}
 	}
+
+
 	public static class Functions
 	{
 
@@ -52,5 +72,5 @@ namespace dksData
 		public static MethodInfo GetTypeFromHandle = typeof(Type).GetMethod("GetTypeFromHandle");
 
 	}
-	
+
 }

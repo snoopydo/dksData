@@ -166,14 +166,14 @@ namespace dksData
 		// Get fields & properties that we can assign to.  
 		// We could extend these to look at custom attributes to handle mapping names to fields from database queries.
 
-		private class settableProperty
+		public class settableProperty
 		{
 			public string Name;
 			public Type PropertyType;
 			public MethodInfo Setter;
 		}
 
-		private class settableField
+		public class settableField
 		{
 			public string Name;
 			public Type PropertyType;

@@ -1,35 +1,22 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Configuration;
 using System.Data;
-using System.Data.Common;
-using System.Data.SqlClient;
 using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
-using System.Text;
-using System.Text.RegularExpressions;
 
 namespace dksData
 {
 	public static partial class Database
 	{
 
-		// include dksData.GetConnection.cs
-		// include dksData.GetCommand.cs
-		// include dksData.ExecuteXXX.cs
-
-
 		// Query
 		// IL Generation
 
 
-
-
-		#region Query(...)
-
-		private static Dictionary<string, object> pocoFactories = new Dictionary<string, object>();
+		// do we want to cache for information about the method? sql, use count, cache time, last used?
+		private static ConcurrentDictionary<string, object> pocoFactories = new ConcurrentDictionary<string, object>();
 
 
 		// Query<TRet>(this IDbConnection db, string sql, params object[] parameters)
@@ -44,7 +31,8 @@ namespace dksData
 				using (var reader = cmd.ExecuteReader())
 				{
 
-					Func<IDataReader, TRet> deserialiser = null;
+					//Func<IDataReader, TRet> deserialiser = null;
+					Func<IDataReader, object> deserialiser = null;
 
 					// this assumes query will allways return same query and not change result sets depending on parameters and there values...
 					string cacheKey;
@@ -56,14 +44,16 @@ namespace dksData
 						object factory;
 						if (pocoFactories.TryGetValue(cacheKey, out factory))
 						{
-							deserialiser = factory as Func<IDataReader, TRet>;
+							//deserialiser = factory as Func<IDataReader, TRet>;
+							deserialiser = factory as Func<IDataReader, object>;
+
 						}
 					}
 
 					if (deserialiser == null)
 					{
 						// make function
-						deserialiser = GetDeserliser2<TRet>(reader);
+						deserialiser = GetDeserliser<TRet>(reader);
 
 						// cache it
 						lock (pocoFactories)
@@ -75,7 +65,7 @@ namespace dksData
 
 					while (reader.Read())
 					{
-						yield return deserialiser(reader);
+						yield return (TRet)deserialiser(reader);
 					}
 
 					reader.Close();
@@ -90,57 +80,90 @@ namespace dksData
 			return type.ToString() + '-' + dc.CommandText + '-' + db.ConnectionString;
 		}
 
-		#endregion
 
 
-		private static Func<IDataReader, TRet> GetDeserliser2<TRet>(IDataReader reader)
+		//private static Func<IDataReader, TRet> GetDeserliser<TRet>(IDataReader reader)
+		private static Func<IDataReader, object> GetDeserliser<TRet>(IDataReader reader)
 		{
 
-			// for now, assume TRet is a class, we need to handle ints, string, structs etc...
+			Type returnType = typeof(TRet);
 
-			Type type = typeof(TRet);
-
-			// tempary, need to implement proper handling of classes, sturcts, etc...
-			if (type.IsValueType || type == typeof(string) || type == typeof(byte[]))
+			if (
+				(returnType.IsClass && returnType != typeof(string) && returnType != typeof(byte[]))
+				|| (returnType.IsValueType && !returnType.IsPrimitive && returnType != typeof(DateTime) && !(returnType.IsGenericType && returnType.GetGenericTypeDefinition() == typeof(Nullable<>))))
 			{
-				return (rdr) => (TRet)rdr.GetValue(0);
-			}
-			else if (IsStructure(type))
-			{
-				// is rubbish, need to build method similar to that for handling classes below.
-				return (rdr) => (TRet)rdr.GetValue(0);
-			}
-			else
-			{
-
 				// define our custom method 
 				// static TRet DeserialiseXXXXX(reader) {}
-				var dm = new DynamicMethod(string.Format("Deserialise{0}", Guid.NewGuid()), type, new[] { typeof(IDataReader) }, true);
+				//var dm = new DynamicMethod(string.Format("Deserialise{0}", Guid.NewGuid()), returnType, new[] { typeof(IDataReader) }, true);
+				var dm = new DynamicMethod(string.Format("Deserialise{0}", Guid.NewGuid()), typeof(object), new[] { typeof(IDataReader) }, true);
+
 				var il = dm.GetILGenerator();
 
-				// define local var for return type.
-				LocalBuilder returnItem = il.DeclareLocal(type);
+				// int idx;     // so we know the column index into reader that caused us grief.
+				LocalBuilder idx = il.DeclareLocal(typeof(int));
 
-				il.GenerateMethodBlock(reader, 0, -1, returnItem);
+
+				// define local var for return type.
+				LocalBuilder returnItem = il.DeclareLocal(returnType);
+
+
+				//try {
+				il.BeginExceptionBlock();
+
+				// method section to build returnItem
+				il.GenerateMethodBlock(reader, idx, 0, -1, returnItem);
+
+
+				//} catch (Exception ex) {
+				il.BeginCatchBlock(typeof(Exception));												// ex
+
+				// db.ThrowDataException(Exception ex, int idx, IDataReader reader);
+				il.Emit(OpCodes.Ldloc, idx);														// ex, idx
+				il.Emit(OpCodes.Ldarg_0);                       									// ex, idx, reader
+
+				il.EmitCall(OpCodes.Call, MethodInfo.GetCurrentMethod().DeclaringType.GetMethod("ThrowDataException", BindingFlags.Static | BindingFlags.NonPublic), null);
+
+				if (!returnType.IsValueType)
+				{
+					// item = null;
+					il.Emit(OpCodes.Ldnull);														// ex, null
+					il.Emit(OpCodes.Stloc, returnItem);												// ex
+				}
+
+				//}
+				il.EndExceptionBlock();
+
 
 				// return item;
 				il.Emit(OpCodes.Ldloc, returnItem);
+				if (returnType.IsValueType)
+				{
+					il.Emit(OpCodes.Box, returnType);
+				}
 				il.Emit(OpCodes.Ret);
+
+				//} end of method
 
 
 				// finish building/compile function.
-				var factory = (Func<IDataReader, TRet>)dm.CreateDelegate(typeof(Func<IDataReader, TRet>));
+				//var factory = (Func<IDataReader, TRet>)dm.CreateDelegate(typeof(Func<IDataReader, TRet>));
+				var factory = (Func<IDataReader, object>)dm.CreateDelegate(typeof(Func<IDataReader, object>));
 
 				return factory;
 			}
+			else
+			{
+				// todo: Is there a smarter/better way?
+				return (rdr) => (TRet)Convert.ChangeType(rdr.GetValue(0), returnType);
+			}
+
 		}
 
-		private static void GenerateMethodBlock(this ILGenerator il, IDataReader reader, int startBound, int length, LocalBuilder item)
+		private static void GenerateMethodBlock(this ILGenerator il, IDataReader reader, LocalBuilder idx, int startBound, int length, LocalBuilder returnItem)
 		{
 			Type srcType;
 			Type dstType;
 			Type nullUnderlyingType;
-			bool isAssignable;
 			MethodInfo fnGetMethod;
 			Label lblNext;
 
@@ -154,34 +177,32 @@ namespace dksData
 			if (reader.FieldCount <= startBound)
 			{
 				//todo: fix error message
-				throw new ArgumentException("todo: fix me! When using the multi-mapping APIs ensure you set the splitOn param if you have keys other than Id", "splitOn");
+				throw new ArgumentException("When using the multi-mapping APIs ensure you set the splitOn param if you have keys other than Id", "splitOn");
 			}
 
-			Type iType;
-			iType = item.LocalType;
+			Type returnType;
+			returnType = returnItem.LocalType;
 
 
 			// get Properties and Fields of T that we should be able to set
-			var properties = GetSettableProperties(iType);
-			var fields = GetSettableFields(iType);
+			var properties = GetSettableProperties(returnType);
+			var fields = GetSettableFields(returnType);
 
 
-			//try {
-			il.BeginExceptionBlock();
+			if (returnType.IsValueType)
+			{
+				// structs
+				il.Emit(OpCodes.Ldloca, returnItem);
+				il.Emit(OpCodes.Initobj, returnType);
+			}
+			else
+			{
+				// objects
+				// item = new <T>();    // using public or private constructor.
+				il.Emit(OpCodes.Newobj, returnType.GetConstructor(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null, Type.EmptyTypes, null));	// <T>
+				il.Emit(OpCodes.Stloc, returnItem);										                                                                                //
+			}
 
-			// int idx;     // so we know the index into reader that caused us grief.
-			LocalBuilder idx = il.DeclareLocal(typeof(int));
-
-
-			// item = new <T>();    // using public or private constructor.
-			il.Emit(OpCodes.Newobj, iType.GetConstructor(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null, Type.EmptyTypes, null));	// <T>
-			il.Emit(OpCodes.Stloc, item);										                                                                                //
-
-			// for struct
-			//il.Emit(OpCodes.Ldloca, item);
-			//il.Emit(OpCodes.Initobj, iType);
-
-			// for structs this block kills it
 			for (int i = startBound; i < startBound + length; i++)
 			{
 				// get type for reader column(i)
@@ -191,11 +212,13 @@ namespace dksData
 				// ***************************************************************************************************************************************
 
 				// select matching property or field, ordering by properties (case sensitive, case insensitive) then fields (case sensitive, case insensitive)
-				var ps = new
+				Setter ps;
+				ps = new Setter
 				{
 					prop = properties.FirstOrDefault(p => string.Equals(p.Name, reader.GetName(i), StringComparison.InvariantCulture)) ?? properties.FirstOrDefault(p => string.Equals(p.Name, reader.GetName(i), StringComparison.InvariantCultureIgnoreCase)),
 					field = fields.FirstOrDefault(f => string.Equals(f.Name, reader.GetName(i), StringComparison.InvariantCulture)) ?? fields.FirstOrDefault(f => string.Equals(f.Name, reader.GetName(i), StringComparison.InvariantCultureIgnoreCase))
 				};
+
 
 				// did we find a matching property / field?
 				if (ps.prop == null && ps.field == null)
@@ -208,9 +231,6 @@ namespace dksData
 				dstType = ps.prop != null ? ps.prop.PropertyType : ps.field.PropertyType;
 				nullUnderlyingType = Nullable.GetUnderlyingType(dstType);
 
-				// are data types compatible? Is there a direct GetXXX(i) method?
-				isAssignable = dstType.IsAssignableFrom(srcType);
-				fnGetMethod = typeof(IDataRecord).GetMethod("Get" + srcType.Name, new Type[] { typeof(int) });
 
 				// if(!reader.IsDBNull(i))																	// [Stack]
 				// {
@@ -227,9 +247,20 @@ namespace dksData
 
 
 				// "<T>.property/field = (type) reader.GetValue(i);"
-				if (isAssignable)
+
+				// Is there a direct GetXXX(i) method?
+				fnGetMethod = typeof(IDataRecord).GetMethod("Get" + srcType.Name, new Type[] { typeof(int) });
+
+				if (dstType.IsAssignableFrom(srcType))
 				{
-					il.Emit(OpCodes.Ldloc, item);															// <T>
+					if (returnType.IsValueType)
+					{
+						il.Emit(OpCodes.Ldloca, returnItem);												// <T>
+					}
+					else
+					{
+						il.Emit(OpCodes.Ldloc, returnItem);													// <T>
+					}
 					il.Emit(OpCodes.Ldarg_0);																// <T>, reader 
 					il.EmitFastInt(i);																		// <T>, reader, i
 
@@ -240,7 +271,7 @@ namespace dksData
 					else
 					{
 						// getValue, unbox
-						il.Emit(OpCodes.Callvirt, Functions.GetValue);												// <T>, [value as object]
+						il.Emit(OpCodes.Callvirt, Functions.GetValue);										// <T>, [value as object]
 						il.Emit(OpCodes.Unbox_Any, dstType);												// <T>, [value as type]
 					}
 
@@ -249,14 +280,9 @@ namespace dksData
 						il.Emit(OpCodes.Newobj, dstType.GetConstructor(new[] { nullUnderlyingType }));
 					}
 
-					if (ps.prop != null)
-					{
-						il.Emit(OpCodes.Callvirt, ps.prop.Setter);											// <T>
-					}
-					else
-					{
-						il.Emit(OpCodes.Stfld, ps.field.Setter);											// <T>
-					}
+					// assign to <T>.Field/Property
+					il.EmitMemberAssignment(returnType, ps);												// <T>
+
 				}
 				else
 				{
@@ -267,7 +293,14 @@ namespace dksData
 					{
 						if (IsNumericType(srcType))
 						{
-							il.Emit(OpCodes.Ldloc, item);													// <T>
+							if (returnType.IsValueType)
+							{
+								il.Emit(OpCodes.Ldloca, returnItem);										// <T>
+							}
+							else
+							{
+								il.Emit(OpCodes.Ldloc, returnItem);											// <T>
+							}
 							il.Emit(OpCodes.Ldarg_0);														// <T>, reader 
 							il.EmitFastInt(i);																// <T>, reader, i
 
@@ -279,19 +312,20 @@ namespace dksData
 								il.Emit(OpCodes.Newobj, dstType.GetConstructor(new[] { nullUnderlyingType }));
 							}
 
-							if (ps.prop != null)
-							{
-								il.Emit(OpCodes.Callvirt, ps.prop.Setter);									// 
-							}
-							else
-							{
-								il.Emit(OpCodes.Stfld, ps.field.Setter);									// 
-							}
+							// assign to <T>.Field/Property
+							il.EmitMemberAssignment(returnType, ps);										// <T>
 
 						}
 						else if (srcType == typeof(string))
 						{
-							il.Emit(OpCodes.Ldloc, item);													// <T>
+							if (returnType.IsValueType)
+							{
+								il.Emit(OpCodes.Ldloca, returnItem);										// <T>
+							}
+							else
+							{
+								il.Emit(OpCodes.Ldloc, returnItem);											// <T>
+							}
 
 							if (nullUnderlyingType != null)
 							{
@@ -311,14 +345,8 @@ namespace dksData
 							il.EmitCall(OpCodes.Call, Functions.EnumParse, null);							// <T>, enum
 							il.Emit(OpCodes.Unbox_Any, dstType);											// <T>, [enum as dstType]
 
-							if (ps.prop != null)
-							{
-								il.Emit(OpCodes.Callvirt, ps.prop.Setter);									// 
-							}
-							else
-							{
-								il.Emit(OpCodes.Stfld, ps.field.Setter);									// 
-							}
+							// assign to <T>.Field/Property
+							il.EmitMemberAssignment(returnType, ps);										// <T>
 
 						}
 					}
@@ -326,28 +354,38 @@ namespace dksData
 					{
 						// String => Uri
 
-						il.Emit(OpCodes.Ldloc, item);														// <T>
+						if (returnType.IsValueType)
+						{
+							il.Emit(OpCodes.Ldloca, returnItem);											// <T>
+						}
+						else
+						{
+							il.Emit(OpCodes.Ldloc, returnItem);												// <T>
+						}
+
 						il.Emit(OpCodes.Ldarg_0);															// <T>, reader 
 						il.EmitFastInt(i);																	// <T>, reader, i
 
 						il.Emit(OpCodes.Callvirt, Functions.GetString);										// <T>, [string]
 						il.Emit(OpCodes.Newobj, typeof(Uri).GetConstructor(new[] { typeof(string) }));		// <T>, [Uri]
 
-						if (ps.prop != null)
-						{
-							il.Emit(OpCodes.Callvirt, ps.prop.Setter);										// 
-						}
-						else
-						{
-							il.Emit(OpCodes.Stfld, ps.field.Setter);										// 
-						}
+						// assign to <T>.Field/Property
+						il.EmitMemberAssignment(returnType, ps);											// <T>
 
 					}
 					else if ((dstType == typeof(Guid) || nullUnderlyingType == typeof(Guid)) && srcType == typeof(string))
 					{
 						// String => Guid
 
-						il.Emit(OpCodes.Ldloc, item);														// <T>
+						if (returnType.IsValueType)
+						{
+							il.Emit(OpCodes.Ldloca, returnItem);											// <T>
+						}
+						else
+						{
+							il.Emit(OpCodes.Ldloc, returnItem);												// <T>
+						}
+
 						il.Emit(OpCodes.Ldarg_0);															// <T>, reader 
 						il.EmitFastInt(i);																	// <T>, reader, i
 
@@ -359,20 +397,21 @@ namespace dksData
 							il.Emit(OpCodes.Newobj, dstType.GetConstructor(new[] { nullUnderlyingType }));
 						}
 
-						if (ps.prop != null)
-						{
-							il.Emit(OpCodes.Callvirt, ps.prop.Setter);										// 
-						}
-						else
-						{
-							il.Emit(OpCodes.Stfld, ps.field.Setter);										// 
-						}
+						// assign to <T>.Field/Property
+						il.EmitMemberAssignment(returnType, ps);											// <T>
 					}
 					else
 					{
 
 						// o = reader.GetValue(i);
-						il.Emit(OpCodes.Ldloc, item);														// <T>
+						if (returnType.IsValueType)
+						{
+							il.Emit(OpCodes.Ldloca, returnItem);											// <T>
+						}
+						else
+						{
+							il.Emit(OpCodes.Ldloc, returnItem);												// <T>
+						}
 						il.Emit(OpCodes.Ldarg_0);															// <T>, reader 
 						il.EmitFastInt(i);																	// <T>, reader, i
 						il.Emit(OpCodes.Callvirt, Functions.GetValue);										// <T>, [value as object]
@@ -399,14 +438,8 @@ namespace dksData
 
 						}
 
-						if (ps.prop != null)
-						{
-							il.Emit(OpCodes.Callvirt, ps.prop.Setter);										// 
-						}
-						else
-						{
-							il.Emit(OpCodes.Stfld, ps.field.Setter);										// 
-						}
+						// assign to <T>.Field/Property
+						il.EmitMemberAssignment(returnType, ps);											// <T>
 
 					}
 				}
@@ -416,49 +449,23 @@ namespace dksData
 				// ***************************************************************************************************************************************
 			}
 
-			//} catch (Exception ex) {
-			il.BeginCatchBlock(typeof(Exception));														    // ex
 
-			// db.ThrowDataException(Exception ex, int idx, IDataReader reader);
-			il.Emit(OpCodes.Ldloc, idx);																	// ex, idx
-			il.Emit(OpCodes.Ldarg_0);                       												// ex, idx, reader
+		}
 
-			il.EmitCall(OpCodes.Call, MethodInfo.GetCurrentMethod().DeclaringType.GetMethod("ThrowDataException", BindingFlags.Static | BindingFlags.NonPublic), null);
 
-			// item = null;
-			il.Emit(OpCodes.Ldnull);																	    // ex, null
-			il.Emit(OpCodes.Stloc, item);																	// ex
-
-			//}
-			il.EndExceptionBlock();
-
+		public struct Setter
+		{
+			public settableProperty prop;
+			public settableField field;
 		}
 
 
 
 
-
-
-
-
-
-
-
-
-		#region 'Old' code, still to refactor
-
-
-
-		#region "Custom Object Deserliser(IL) Generation"
-	
-
-
-
-
-
+		// todo: ThrowNiceDataException(Exception ex, IDataReader reader, int index, Type currentType, string currentField/Property) {}
 		private static void ThrowDataException(Exception ex, int index, IDataReader reader)
 		{
-			// an exception was thrown/caught in our custome IL deseralise method. re throw with some nice detail.
+			// an exception was thrown/caught in our custom IL deseralise method. re throw with some nice detail.
 
 			string name = "(n/a)", value = "(n/a)";
 			if (reader != null && index >= 0 && index < reader.FieldCount)
@@ -488,17 +495,17 @@ namespace dksData
 
 			switch (Type.GetTypeCode(type))
 			{
-				case TypeCode.Byte:
-				case TypeCode.Decimal:
-				case TypeCode.Double:
-				case TypeCode.Int16:
-				case TypeCode.Int32:
-				case TypeCode.Int64:
 				case TypeCode.SByte:
-				case TypeCode.Single:
+				case TypeCode.Byte:
+				case TypeCode.Int16:
 				case TypeCode.UInt16:
+				case TypeCode.Int32:
 				case TypeCode.UInt32:
+				case TypeCode.Int64:
 				case TypeCode.UInt64:
+				case TypeCode.Single:
+				case TypeCode.Double:
+				case TypeCode.Decimal:
 					return true;
 				case TypeCode.Object:
 					if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Nullable<>))
@@ -506,27 +513,9 @@ namespace dksData
 						return IsNumericType(Nullable.GetUnderlyingType(type));
 					}
 					return false;
-
 			}
 			return false;
 		}
-
-		private static bool IsStructure(Type t)
-		{
-			//return t.IsValueType && !t.IsPrimitive && !t.IsEnum;
-			//return t.IsValueType && !t.IsPrimitive && !t.Namespace.StartsWith("System") && !t.IsEnum;
-
-			if (t.IsValueType == true && t.IsEnum == false && t.IsPrimitive == false)
-				return true;
-			else
-				return false;
-
-		}
-
-		
-
-		#endregion
-		#endregion
 
 
 	}
