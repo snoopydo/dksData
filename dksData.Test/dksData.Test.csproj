@@ -50,7 +50,6 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="AssertHelpers.cs" />
-    <Compile Include="Class1.cs" />
     <Compile Include="dksData.GetConnection.Tests.cs" />
     <Compile Include="ExecuteScalar.cs" />
     <Compile Include="POCOTypes.cs" />
@@ -70,9 +69,6 @@
   </ItemGroup>
   <ItemGroup>
     <Folder Include="App_Data\" />
-  </ItemGroup>
-  <ItemGroup>
-    <Content Include="todo.txt" />
   </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

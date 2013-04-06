@@ -99,6 +99,24 @@ namespace TestProject1
 			dog.First().Id
 				.IsEqualTo(guid);
 		}
+		[TestMethod()]
+		public void TestDog2()
+		{
+			var guid = Guid.NewGuid();
+			var dog = db.Query<Dog>("select '' as Extra, 1 as Age, 0.1 as Name1 , Id = @id", new { Id = guid }).ToList();
+
+			dog.Count()
+			   .IsEqualTo(1);
+
+			dog.First().Age
+				.IsEqualTo(1);
+
+			dog.First().Id
+				.IsEqualTo(guid);
+		}
+
+
+
 
 		class Cat
 		{
@@ -133,17 +151,44 @@ namespace TestProject1
 				.IsEqualTo(guid);
 		}
 
+		[TestMethod()]
+		public void TestCat2()
+		{
+			var guid = Guid.NewGuid();
+			//var cat = db.Query<Cat>("select '' as Extra, 1 as Age, 0.1 as Name1 , Id = @id", new { Id = guid }).ToList();
+			var cat = db.Query<Cat>("select '' as Extra, cast(1 as tinyint) as Age, 0.1 as Name1 , Id = @id", new { Id = guid }).ToList();
+			//var cat = db.Query<Cat>("select '' as Extra, 'abc' as Age, 0.1 as Name1 , Id = @id", new { Id = guid }).ToList();
 
+			cat.Count()
+			   .IsEqualTo(1);
+
+			cat.First().Age
+				.IsEqualTo(1);
+
+			cat.First().Id
+				.IsEqualTo(guid);
+		}
 
 		struct Bird
 		{
+
 			public int Eyes;
 			public string Colour;
+			
 		}
 
 
 		[TestMethod()]
 		public void TestStruct()
+		{
+			var b = db.Query<Bird>("select 2 as Eyes, 'Green' as Colour").FirstOrDefault();
+
+			b.Colour.IsEqualTo("Green");
+			b.Eyes.IsEqualTo(2);
+		}
+
+		[TestMethod()]
+		public void TestStruct2()
 		{
 			var b = db.Query<Bird>("select 2 as Eyes, 'Green' as Colour").FirstOrDefault();
 
