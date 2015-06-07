@@ -29,7 +29,7 @@ namespace dksData
 	{
 
 		[System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Security", "CA2100:Review SQL queries for security vulnerabilities")]
-		public static IDbCommand CreateCommand(IDbConnection db, string sql, params object[] parameters)
+		public static IDbCommand CreateCommand(IDbConnection db, IDbTransaction transaction, string sql, params object[] parameters)
 		{
 			IDbCommand cmd;
 
@@ -45,7 +45,12 @@ namespace dksData
 			cmd.CommandText = sql;
 			//cmd.CommandTimeout = commandTimeout;
 			//cmd.CommandType = commandType;
-			//cmd.Transaction = transaction;
+
+			if (transaction != null)
+			{
+				cmd.Transaction = transaction;
+			}
+
 
 			foreach (var param in parameters)
 			{

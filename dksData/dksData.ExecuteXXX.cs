@@ -25,12 +25,14 @@ namespace dksData
 
 		public static T ExecuteScalar<T>(this IDbConnection db, string sql, params object[] parameters)
 		{
+			return ExecuteScalarWithTransaction<T>(db, null, sql, parameters);
+		}
 
-			using (var cmd = CreateCommand(db, sql, parameters))
+		public static T ExecuteScalarWithTransaction<T>(this IDbConnection db, IDbTransaction transaction, string sql, params object[] parameters)
+		{
+
+			using (var cmd = CreateCommand(db, transaction, sql, parameters))
 			{
-				//cmd.CommandTimeout = commandTimeout;
-				//cmd.CommandType = commandType;
-				//cmd.Transaction = transaction;
 				object result;
 
 				result = cmd.ExecuteScalar();
@@ -43,28 +45,28 @@ namespace dksData
 
 		public static int ExecuteNonQuery(this IDbConnection db, string sql, params object[] parameters)
 		{
-			using (var cmd = CreateCommand(db, sql, parameters))
-			{
-				//cmd.CommandTimeout = commandTimeout;
-				//cmd.CommandType = commandType;
-				//cmd.Transaction = transaction;
-
-				return cmd.ExecuteNonQuery();
-
-			}
+			return ExecuteNonQueryWithTransaction(db, null, sql, parameters);
 		}
 
+		public static int ExecuteNonQueryWithTransaction(this IDbConnection db, IDbTransaction transaction, string sql, params object[] parameters)
+		{
+			using (var cmd = CreateCommand(db, transaction,sql, parameters))
+			{
+				return cmd.ExecuteNonQuery();
+			}
+		}
+		
 		public static IDataReader ExecuteReader(this IDbConnection db, string sql, params object[] parameters)
 		{
-			using (var cmd = CreateCommand(db, sql, parameters))
+			return ExecuteReaderWithTransaction(db, null, sql, parameters);
+		}
+
+		public static IDataReader ExecuteReaderWithTransaction(this IDbConnection db, IDbTransaction transaction, string sql, params object[] parameters)
+		{
+			using (var cmd = CreateCommand(db, transaction,sql, parameters))
 			{
-				//cmd.CommandTimeout = commandTimeout;
-				//cmd.CommandType = commandType;
-				//cmd.Transaction = transaction;
 				// pass in CommandBehavior
-
 				return cmd.ExecuteReader(CommandBehavior.CloseConnection);
-
 			}
 		}
 

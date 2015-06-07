@@ -40,11 +40,15 @@ namespace dksData
 
 		// Query<TRet>(this IDbConnection db, string sql, params object[] parameters)
 		// Query<TRet>(this IDbConnection db, Type[] types, object callback, string sql, params object[] parameters)
-
 		public static IEnumerable<TRet> Query<TRet>(this IDbConnection db, string sql, params object[] parameters)
 		{
+			return QueryWithTransaction<TRet>(db, null, sql, parameters);
+		}
 
-			using (var cmd = CreateCommand(db, sql, parameters))
+		public static IEnumerable<TRet> QueryWithTransaction<TRet>(this IDbConnection db, IDbTransaction transaction, string sql, params object[] parameters)
+		{
+
+			using (var cmd = CreateCommand(db, transaction, sql, parameters))
 			{
 
 				using (var reader = cmd.ExecuteReader())
@@ -53,7 +57,7 @@ namespace dksData
 					//Func<IDataReader, TRet> deserialiser = null;
 					Func<IDataReader, object> deserialiser = null;
 
-					// this assumes query will allways return same query and not change result sets depending on parameters and there values...
+					// this assumes query will always return same query and not change result sets depending on parameters and values...
 					string cacheKey;
 					cacheKey = GetCacheKey(typeof(TRet), db, cmd, sql);
 
@@ -299,7 +303,7 @@ namespace dksData
 					// String/Int => Enum
 					if (dstType.IsEnum || (nullUnderlyingType != null && nullUnderlyingType.IsEnum))
 					{
-						if(srcType.IsNumeric())
+						if (srcType.IsNumeric())
 						{
 							if (returnType.IsValueType)
 							{
@@ -489,7 +493,12 @@ namespace dksData
 				}
 			}
 
-			throw new DataException(string.Format("Error assigning value {0} to {1}", value, name), ex);
+			var exception = new DataException(string.Format("Error assigning value {0} to {1}", value, name), ex);
+
+			//todo: retrieve sql and pass back in exception.  for StackExchange.Exceptional to report on.
+			//exception.Data["SQL"] = "??";
+
+			throw exception;
 
 		}
 
