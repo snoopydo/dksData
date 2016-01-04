@@ -21,6 +21,7 @@ using System.Configuration;
 using System.Data;
 using System.Data.Common;
 using System.Data.SqlClient;
+using System.Threading.Tasks;
 
 namespace dksData
 {
@@ -32,21 +33,29 @@ namespace dksData
 		// todo: handle different variable prefixs in sql string. ie MySQL uses ? and Oracle use a :
 		// todo: implement fill dataset?
 
-		// cache functions to create appropriate IDbConnection.
-		private static ConcurrentDictionary<string, Func<IDbConnection>> dbFactoryCache = new ConcurrentDictionary<string, Func<IDbConnection>>();
+		// cache functions to create appropriate DbConnection.
+		private static ConcurrentDictionary<string, Func<DbConnection>> dbFactoryCache = new ConcurrentDictionary<string, Func<DbConnection>>();
 
 
-		public static IDbConnection GetOpenConnection(string connectionStringName)
+		public static DbConnection GetOpenConnection(string connectionStringName)
 		{
 			var db = GetConnection(connectionStringName);
 			db.Open();
-
 			return db;
 		}
 
-		public static IDbConnection GetConnection(string connectionStringName)
+		public static async Task<DbConnection> GetOpenConnectionAsync(string connectionStringName)
 		{
-			Func<IDbConnection> createConnection;
+			var db = GetConnection(connectionStringName);
+			await db.OpenAsync();
+			return db;
+		}
+
+
+
+		public static DbConnection GetConnection(string connectionStringName)
+		{
+			Func<DbConnection> createConnection;
 
 			if (ConfigurationManager.ConnectionStrings[connectionStringName] == null)
 			{
@@ -64,7 +73,7 @@ namespace dksData
 				{
 					createConnection = () =>
 					{
-						IDbConnection db;
+						DbConnection db;
 						db = new SqlConnection();
 						db.ConnectionString = connectionSettings.ConnectionString;
 						return db;
